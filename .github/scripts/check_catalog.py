@@ -262,7 +262,11 @@ def run(base_text: str, head_text: str, author: str, changed_files: list[str], f
             problems.append(f"entry `{e.get('id')}`: the pull request removes it; a maintainer removes entries, not a pull request")
 
     manifest_schema = load_schema(MANIFEST_SCHEMA)
+    checked = set()
     for entry in changed_entries(base, head):
+        if entry["id"] in checked:  # a second entry with this id is already reported by check_ids
+            continue
+        checked.add(entry["id"])
         problems += check_entry(fetch, entry, author, manifest_schema)
     return problems
 

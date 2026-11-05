@@ -93,6 +93,10 @@ class CatalogCheck(unittest.TestCase):
         problems = run([listed, ENTRY], base=[listed])
         self.assertTrue(any("the id is taken" in p for p in problems), problems)
 
+    def test_duplicate_is_checked_once(self):
+        problems = run([ENTRY, dict(ENTRY, name="Jira again")], fetch=github(assets=BINARIES))
+        self.assertEqual(sum("no `checksums.txt`" in p for p in problems), 1, problems)
+
     def test_id_with_jaira_is_refused(self):
         problems = run([dict(ENTRY, id="jaira-jira")])
         self.assertTrue(any("must not contain `jaira`" in p for p in problems), problems)
