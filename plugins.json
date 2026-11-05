@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "id": "hello",
+    "name": "Hello",
+    "author": "Alexander Sacharov",
+    "description": "The example plugin from jaira-plugin-template: counts a board's tickets and leaves a hello note on one.",
+    "repo": "https://github.com/panda-bobr/jaira-hello-demo"
+  }
+]
