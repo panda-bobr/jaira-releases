@@ -64,7 +64,13 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           git fetch --no-tags --depth=1 "https://github.com/${GITHUB_REPOSITORY}.git" "refs/pull/${PR}/head"
-          git show "${HEAD_SHA}:plugins.json" > "$RUNNER_TEMP/head.json" || echo '"plugins.json is missing"' > "$RUNNER_TEMP/head.json"
+          # pushed again since the event: the ref now names a newer commit and
+          # HEAD_SHA is not in the shallow fetch; the run for that push follows
+          if git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+            git show "${HEAD_SHA}:plugins.json" > "$RUNNER_TEMP/head.json" || echo '"plugins.json is missing"' > "$RUNNER_TEMP/head.json"
+          else
+            touch "$RUNNER_TEMP/head-gone"
+          fi
           gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt"
 
       - name: Check the catalogue
@@ -74,9 +80,10 @@ jobs:
           AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           set +e
+          if [ -f "$RUNNER_TEMP/head-gone" ]; then head=(--head-gone); else head=(--head "$RUNNER_TEMP/head.json"); fi
           python .github/scripts/check_catalog.py \
             --base plugins.json \
-            --head "$RUNNER_TEMP/head.json" \
+            "${head[@]}" \
             --author "$AUTHOR" \
             --changed-files "$RUNNER_TEMP/changed.txt" \
             --report "$RUNNER_TEMP/report.md"
