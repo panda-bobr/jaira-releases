@@ -54,7 +54,7 @@ JAIRA_COMMANDS = frozenset(
     note projects pull reject release resolve restore resume roles self
     sessions set share show snapshot sync-tasks tag tags tasks update validate
     web whoami
-    plugin plugins install uninstall version event manifest
+    plugin plugins install uninstall version
     """.split()
 )
 
@@ -267,7 +267,12 @@ def run(base_text: str, head_text: str, author: str, changed_files: list[str], f
         if entry["id"] in checked:  # a second entry with this id is already reported by check_ids
             continue
         checked.add(entry["id"])
-        problems += check_entry(fetch, entry, author, manifest_schema)
+        try:
+            problems += check_entry(fetch, entry, author, manifest_schema)
+        except urllib.error.HTTPError as e:
+            problems.append(f"entry `{entry['id']}`: GitHub answered {e.code} for {e.url}; this is not your entry's fault — re-run the check")
+        except urllib.error.URLError as e:
+            problems.append(f"entry `{entry['id']}`: GitHub could not be reached ({e.reason}); re-run the check")
     return problems
 
 

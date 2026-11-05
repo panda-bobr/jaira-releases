@@ -174,6 +174,18 @@ class CatalogCheck(unittest.TestCase):
         problems = run([ENTRY], fetch=github(checksums=f"{'0' * 64}  {BINARIES[0]}\n"))
         self.assertTrue(any("has no line for `jaira-jira_darwin_amd64`" in p for p in problems), problems)
 
+    def test_github_error_is_reported_not_raised(self):
+        import urllib.error
+
+        def broken(url):
+            raise urllib.error.HTTPError(url, 503, "unavailable", None, None)
+
+        problems = run([ENTRY], fetch=broken)
+        self.assertTrue(any("GitHub answered 503" in p and "re-run" in p for p in problems), problems)
+
+    def test_event_is_a_free_id(self):
+        self.assertNotIn("event", cc.JAIRA_COMMANDS)
+
     def test_report_lists_problems(self):
         text = cc.report(["entry `x`: broken"])
         self.assertIn("failed", text)

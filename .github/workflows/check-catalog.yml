@@ -73,7 +73,7 @@ jobs:
             --changed-files "$RUNNER_TEMP/changed.txt" \
             --report "$RUNNER_TEMP/report.md"
           code=$?
-          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          [ -f "$RUNNER_TEMP/report.md" ] && cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
           echo "code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
@@ -83,6 +83,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
+          # no report means the script itself crashed; the failing run says so, an empty comment would not
+          [ -f "$RUNNER_TEMP/report.md" ] || exit 0
           marker='<!-- check-catalog -->'
           body="$(printf '%s\n%s' "$marker" "$(cat "$RUNNER_TEMP/report.md")")"
           id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
