@@ -19,7 +19,8 @@ The pull request's own code is never run: this script and the schemas come
 from main, plugins.json from the pull request is read as data.
 
 Usage:
-  check_catalog.py --base <plugins.json on main> --head <plugins.json of the PR>
+  check_catalog.py --base <plugins.json on main>
+                   (--head <plugins.json of the PR> | --head-gone)
                    --author <login> [--changed-files <file>] [--report <file>]
 
 Exit 0 when the pull request passes, 1 when it does not; the problems are
@@ -64,6 +65,9 @@ PLATFORMS = [
 ]
 
 API = "https://api.github.com"
+
+
+HEAD_GONE = "the pull request changed while it was checked; the next run replaces this comment"
 
 
 class NotFound(Exception):
@@ -303,14 +307,18 @@ def report(problems: list[str]) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True)
-    ap.add_argument("--head", required=True)
+    head = ap.add_mutually_exclusive_group(required=True)
+    head.add_argument("--head")
+    # The pull request was pushed again between the event and this run: the
+    # commit the event named is gone, and the run for the new push follows.
+    head.add_argument("--head-gone", action="store_true")
     ap.add_argument("--author", required=True)
     ap.add_argument("--changed-files")
     ap.add_argument("--report")
     args = ap.parse_args(argv)
 
     changed = Path(args.changed_files).read_text().split("\n") if args.changed_files else []
-    problems = run(
+    problems = [HEAD_GONE] if args.head_gone else run(
         Path(args.base).read_text(),
         Path(args.head).read_text(),
         args.author,

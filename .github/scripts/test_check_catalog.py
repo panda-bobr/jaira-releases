@@ -206,6 +206,18 @@ class CatalogCheck(unittest.TestCase):
         listed = dict(ENTRY, description="Old line.")
         self.assertEqual(run([ENTRY], base=[listed]), [])
 
+    def test_head_gone_says_the_next_run_replaces_it(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            base, out = Path(d, "base.json"), Path(d, "report.md")
+            base.write_text("[]")
+            code = cc.main(["--base", str(base), "--head-gone", "--author", "jane", "--report", str(out)])
+            text = out.read_text()
+        self.assertEqual(code, 1)
+        self.assertIn("the pull request changed while it was checked; the next run replaces this comment", text)
+        self.assertNotIn("JSON array", text)
+
     def test_report_lists_problems(self):
         text = cc.report(["entry `x`: broken"])
         self.assertIn("failed", text)
