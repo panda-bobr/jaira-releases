@@ -249,12 +249,6 @@ def check_takeover(fetch: Fetch, old: dict, new: dict, author: str) -> list[str]
     return []
 
 
-def changed_entries(base: list, head: list) -> list[dict]:
-    """Entries of head that are new or differ from base."""
-    by_id = {e.get("id"): e for e in base if isinstance(e, dict)}
-    return [e for e in head if isinstance(e, dict) and by_id.get(e.get("id")) != e]
-
-
 def run(base_text: str, head_text: str, author: str, changed_files: list[str], fetch: Fetch) -> list[str]:
     problems = []
     others = [f for f in changed_files if f and f != CATALOG]
@@ -282,7 +276,7 @@ def run(base_text: str, head_text: str, author: str, changed_files: list[str], f
     manifest_schema = load_schema(MANIFEST_SCHEMA)
     listed = {e.get("id"): e for e in base if isinstance(e, dict)}
     checked = set()
-    for entry in changed_entries(base, head):
+    for entry in (e for e in head if listed.get(e["id"]) != e):  # new or changed entries only
         if entry["id"] in checked:  # a second entry with this id is already reported by check_ids
             continue
         checked.add(entry["id"])
