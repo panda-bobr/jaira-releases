@@ -174,6 +174,38 @@ class CatalogCheck(unittest.TestCase):
         problems = run([ENTRY], fetch=github(checksums=f"{'0' * 64}  {BINARIES[0]}\n"))
         self.assertTrue(any("has no line for `jaira-jira_darwin_amd64`" in p for p in problems), problems)
 
+    def test_github_error_is_reported_not_raised(self):
+        import urllib.error
+
+        def broken(url):
+            raise urllib.error.HTTPError(url, 503, "unavailable", None, None)
+
+        problems = run([ENTRY], fetch=broken)
+        self.assertTrue(any("GitHub answered 503" in p and "re-run" in p for p in problems), problems)
+
+    def test_event_is_a_free_id(self):
+        self.assertNotIn("event", cc.JAIRA_COMMANDS)
+
+    def test_takeover_of_a_listed_id_is_refused(self):
+        listed = dict(ENTRY, repo="https://github.com/alice/jaira-jira", author="Alice")
+        fetch = github()  # jane owns jane/jaira-jira; alice/jaira-jira is gone
+        problems = run([ENTRY], base=[listed], fetch=fetch)
+        self.assertTrue(any("listed repository https://github.com/alice/jaira-jira" in p for p in problems), problems)
+
+    def test_takeover_with_foreign_old_repo_is_refused(self):
+        listed = dict(ENTRY, author="Jane D.")
+        moved = dict(ENTRY, author="Jane Doe")
+        problems = run([moved], base=[listed], author="mallory")
+        self.assertTrue(any("needs the owner of the listed repository" in p for p in problems), problems)
+
+    def test_owner_of_both_repos_may_move_the_entry(self):
+        listed = dict(ENTRY, author="Jane D.")
+        self.assertEqual(run([ENTRY], base=[listed]), [])
+
+    def test_description_change_needs_no_old_owner_check(self):
+        listed = dict(ENTRY, description="Old line.")
+        self.assertEqual(run([ENTRY], base=[listed]), [])
+
     def test_report_lists_problems(self):
         text = cc.report(["entry `x`: broken"])
         self.assertIn("failed", text)

@@ -7,24 +7,29 @@ name: check-catalog
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
-    # A maintainer's pull request to the check itself does not touch
-    # plugins.json and is not a catalogue entry; it gets the unit job on main.
+    # A pull request to the check itself does not touch plugins.json and is
+    # not a catalogue entry; it gets the unit job below instead.
     paths: [plugins.json]
+  # The unit tests run the pull request's own code, so they run on
+  # pull_request: a fork gets a read-only token and no secrets there.
+  pull_request:
+    paths: [".github/**", "schema/**"]
   push:
     branches: [main]
-    paths: [".github/scripts/**", "schema/**"]
+    paths: [".github/**", "schema/**"]
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
-  group: check-catalog-${{ github.event.pull_request.number || github.sha }}
+  # per event: a pull request touching plugins.json and .github/** runs both
+  # jobs, and one must not cancel the other
+  group: check-catalog-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
   unit:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +42,9 @@ jobs:
   check:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Check out main (not the pull request)
         uses: actions/checkout@v4
@@ -73,7 +81,7 @@ jobs:
             --changed-files "$RUNNER_TEMP/changed.txt" \
             --report "$RUNNER_TEMP/report.md"
           code=$?
-          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          [ -f "$RUNNER_TEMP/report.md" ] && cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
           echo "code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
@@ -83,6 +91,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
+          # no report means the script itself crashed; the failing run says so, an empty comment would not
+          [ -f "$RUNNER_TEMP/report.md" ] || exit 0
           marker='<!-- check-catalog -->'
           body="$(printf '%s\n%s' "$marker" "$(cat "$RUNNER_TEMP/report.md")")"
           id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
