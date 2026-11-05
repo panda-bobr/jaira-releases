@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "id": "ci-fixture",
+    "name": "CI fixture: no checksums.txt",
+    "author": "Alexander Sacharov",
+    "description": "Test entry for the catalogue check; this pull request is never merged.",
+    "repo": "https://github.com/sashasoft90/jaira-plugin-ci-fixture"
+  },
+  {
+    "id": "ci-fixture-norelease",
+    "name": "CI fixture: no release",
+    "author": "Alexander Sacharov",
+    "description": "Test entry for the catalogue check; this pull request is never merged.",
+    "repo": "https://github.com/sashasoft90/jaira-plugin-ci-fixture-norelease"
+  },
+  {
+    "id": "ci-fixture",
+    "name": "CI fixture: duplicate id",
+    "author": "Alexander Sacharov",
+    "description": "Test entry for the catalogue check; this pull request is never merged.",
+    "repo": "https://github.com/sashasoft90/jaira-plugin-ci-fixture"
+  }
+]
