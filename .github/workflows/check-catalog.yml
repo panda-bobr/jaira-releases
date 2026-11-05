@@ -1,0 +1,98 @@
+name: check-catalog
+
+# pull_request_target runs this file and the check script as they are on main,
+# never as the pull request has them: a pull request that rewrote the check
+# could otherwise pass itself. Nothing from the pull request is executed —
+# its plugins.json is read as data with `git show`.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    # A maintainer's pull request to the check itself does not touch
+    # plugins.json and is not a catalogue entry; it gets the unit job on main.
+    paths: [plugins.json]
+  push:
+    branches: [main]
+    paths: [".github/scripts/**", "schema/**"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: check-catalog-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install jsonschema==4.23.0
+      - run: python -m unittest discover -s .github/scripts -v
+
+  check:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main (not the pull request)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install jsonschema==4.23.0
+
+      - name: Read the pull request's plugins.json as data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --depth=1 "https://github.com/${GITHUB_REPOSITORY}.git" "refs/pull/${PR}/head"
+          git show "${HEAD_SHA}:plugins.json" > "$RUNNER_TEMP/head.json" || echo '"plugins.json is missing"' > "$RUNNER_TEMP/head.json"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt"
+
+      - name: Check the catalogue
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set +e
+          python .github/scripts/check_catalog.py \
+            --base plugins.json \
+            --head "$RUNNER_TEMP/head.json" \
+            --author "$AUTHOR" \
+            --changed-files "$RUNNER_TEMP/changed.txt" \
+            --report "$RUNNER_TEMP/report.md"
+          code=$?
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Tell the author on the pull request
+        if: always() && steps.check.outputs.code != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          marker='<!-- check-catalog -->'
+          body="$(printf '%s\n%s' "$marker" "$(cat "$RUNNER_TEMP/report.md")")"
+          id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+                 --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -f body="$body" > /dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -f body="$body" > /dev/null
+          fi
+
+      - name: Fail when the check found problems
+        if: steps.check.outputs.code != '0'
+        run: exit 1
