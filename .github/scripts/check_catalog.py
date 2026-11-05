@@ -8,7 +8,8 @@ checks every entry the pull request adds or changes:
 - every id is unique, does not contain "jaira" and does not name a jaira command
 - the repository exists on GitHub and is public
 - the pull request's author owns the repository (or is a public member of the
-  organisation that does)
+  organisation that does); changing `repo` or `author` of a listed id needs
+  the owner of the listed repository as well
 - jaira-plugin.json on the repository's default branch matches
   schema/jaira-plugin.schema.json and carries the entry's id
 - a release v<version> exists, with a binary for linux, darwin and windows on
@@ -226,6 +227,28 @@ def check_entry(fetch: Fetch, entry: dict, author: str, manifest_schema) -> list
     return problems
 
 
+def check_takeover(fetch: Fetch, old: dict, new: dict, author: str) -> list[str]:
+    """A listed entry changes hands only when the author owns the old repository too.
+
+    check_entry already requires the author to own the new one; without this,
+    anybody could point a listed id at a repository of their own.
+    """
+    if old["repo"] == new["repo"] and old["author"] == new["author"]:
+        return []
+    id_ = new["id"]
+    owner, repo = old["repo"].split("/")[-2:]
+    try:
+        info = get_json(fetch, f"{API}/repos/{owner}/{repo}")
+    except NotFound:
+        return [f"entry `{id_}`: the listed repository {old['repo']} no longer exists, so nobody can prove they own it; ask a maintainer to change the entry"]
+    if check_owner(fetch, info.get("owner", {}), author):
+        return [
+            f"entry `{id_}`: changing `repo` or `author` of a listed plugin needs the owner of the listed repository {old['repo']} "
+            f"as well as of the new one; `{author}` does not own it"
+        ]
+    return []
+
+
 def changed_entries(base: list, head: list) -> list[dict]:
     """Entries of head that are new or differ from base."""
     by_id = {e.get("id"): e for e in base if isinstance(e, dict)}
@@ -257,12 +280,15 @@ def run(base_text: str, head_text: str, author: str, changed_files: list[str], f
             problems.append(f"entry `{e.get('id')}`: the pull request removes it; a maintainer removes entries, not a pull request")
 
     manifest_schema = load_schema(MANIFEST_SCHEMA)
+    listed = {e.get("id"): e for e in base if isinstance(e, dict)}
     checked = set()
     for entry in changed_entries(base, head):
         if entry["id"] in checked:  # a second entry with this id is already reported by check_ids
             continue
         checked.add(entry["id"])
         try:
+            if entry["id"] in listed:
+                problems += check_takeover(fetch, listed[entry["id"]], entry, author)
             problems += check_entry(fetch, entry, author, manifest_schema)
         except urllib.error.HTTPError as e:
             problems.append(f"entry `{entry['id']}`: GitHub answered {e.code} for {e.url}; this is not your entry's fault — re-run the check")

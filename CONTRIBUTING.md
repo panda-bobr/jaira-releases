@@ -69,8 +69,12 @@ plugin and merges the entry — the check is the minimum, not the decision.
 ## After it is listed
 
 - **A new version** is a new release in your repository. No pull request.
-- **A changed name, description or repository** is a pull request that
-  changes your entry; the same check runs.
+- **A changed name or description** is a pull request that changes your
+  entry; the same check runs.
+- **A changed `repo` or `author`** needs a pull request from an account that
+  owns both the listed repository and the new one. Anything else — a plugin
+  that changes hands, a repository that is gone — goes through a maintainer;
+  open an issue.
 - **Removing a plugin** is done by a maintainer; open an issue.
 
 A plugin that does more than its `capabilities` declare is removed from the
