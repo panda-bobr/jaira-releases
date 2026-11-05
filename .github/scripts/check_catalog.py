@@ -109,11 +109,6 @@ def schema_errors(validator, doc) -> list[str]:
     return out
 
 
-def owner_repo(url: str) -> tuple[str, str]:
-    parts = url.rstrip("/").split("/")
-    return parts[-2], parts[-1]
-
-
 def check_file_shape(head_text: str, entry_schema) -> tuple[list, list[str]]:
     """Parse plugins.json and check it against the entry schema."""
     try:
@@ -197,7 +192,7 @@ def check_release(fetch: Fetch, owner: str, repo: str, id_: str, version: str) -
 
 def check_entry(fetch: Fetch, entry: dict, author: str, manifest_schema) -> list[str]:
     id_ = entry["id"]
-    owner, repo = owner_repo(entry["repo"])
+    owner, repo = entry["repo"].split("/")[-2:]  # the schema pins https://github.com/<owner>/<repo>
     p = lambda msg: f"entry `{id_}`: {msg}"
     try:
         info = get_json(fetch, f"{API}/repos/{owner}/{repo}")
